@@ -28,22 +28,24 @@ class ItemizedLayer(keras.layers.Layer):
         output_dim = (dim,) if isinstance(dim, int) else dim
 
         layers = []
-        if id is not None:
-            if self.n_items == 1:
-                raise ValueError
-            layers.append(keras.layers.Embedding(
-                input_dim=self.n_items,
-                output_dim=flattened_dim,
-                input_length=1,
-                name=f'{name}_embedding'
-            ))
-            if self.shared_embedding_projection:
-                layers.append(keras.layers.Dense(flattened_dim, name=f'{name}_dense'))
+        # # if id is not None:
+        # if self.n_items == 1:
+        #         # raise ValueError
+        #     embedding_layer = keras.layers.Embedding
+        # else:
+        #     embedding_layer = LazyEmbedding
 
-            layers.append(keras.layers.Reshape(output_dim, name=f'{name}_reshape'))
+        layers.append(keras.layers.Embedding(
+            input_dim=self.n_items,
+            output_dim=flattened_dim,
+            input_length=1,
+            name=f'{name}_embedding'
+        ))
 
-        else:
-            assert False, 'what is the right way to index this?'
+        if self.shared_embedding_projection:
+            layers.append(keras.layers.Dense(flattened_dim, name=f'{name}_dense'))
+
+        layers.append(keras.layers.Reshape(output_dim, name=f'{name}_reshape'))
 
         return layers
 
@@ -100,7 +102,7 @@ class LinearTrend(ItemizedLayer):
 
 class SaturatingTrend(LinearTrend):
     def __init__(self, *args, cap, **kwargs):
-        super().__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.cap = cap
 
     def call(self, inputs):
@@ -154,7 +156,6 @@ class RyanAdadms:
         self.optimizer = optimizer
         
         self._base_inputs, self._feature_inputs = self._build_inputs()
-        self._inputs = {**self._base_inputs, **self._feature_inputs}
         self._model = self._build_model()
 
     def fit(self, X, y):
@@ -173,7 +174,10 @@ class RyanAdadms:
             *seasonal_layers,
             *(feature_layer or [])])
         Z = self._build_outputs(W)
-        model = keras.models.Model(inputs=list(self._inputs.values()), outputs=Z)
+        model = keras.models.Model(
+            inputs=self._model_inputs,
+            outputs=Z
+        )
         model.compile(loss=self.loss, optimizer=self.optimizer)
         return model
 
@@ -182,7 +186,7 @@ class RyanAdadms:
         if self._max_n_items() > 1:
             base_inputs['id'] = keras.Input((1,), name='id')
         else:
-            base_inputs['id'] = None
+            base_inputs['id'] = keras.layers.Lambda(_singular_embedding_index)(base_inputs['t'])
 
         feature_inputs = {
             f: keras.Input((1,), name=f) for f in self.feature_names
@@ -232,6 +236,22 @@ class RyanAdadms:
             x = [x]
         return x
 
+    @property
+    def _model_inputs(self):
+        inputs = [self._base_inputs['t']]
+        if self._max_n_items() > 1:
+            inputs.append(self._base_inputs['id'])
+        inputs.extend(self._feature_inputs.values())
+        return inputs
+    
+
 
 def _flatten(x):
     return list(chain.from_iterable(x))
+
+
+def _singular_embedding_index(input_batch):
+    tf_constant = keras.backend.constant(np.array([[0]]))
+    batch_size = keras.backend.shape(input_batch)[0]
+    tiled_constant = keras.backend.tile(tf_constant, (batch_size, 1))
+    return tiled_constant
