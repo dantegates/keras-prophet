@@ -183,8 +183,9 @@ class RyanAdadms:
         base_inputs = {'t': keras.Input((1,), name='t')}
         if self._max_n_items() > 1:
             base_inputs['id'] = keras.Input((1,), name='id')
-        else:
-            base_inputs['id'] = keras.layers.Lambda(_singular_embedding_index)(base_inputs['t'])
+
+        if self._min_n_items() == 1:
+            self._fake_id = keras.layers.Lambda(_singular_embedding_index)(base_inputs['t'])
 
         feature_inputs = {
             f: keras.Input((1,), name=f) for f in self.feature_names
@@ -207,7 +208,12 @@ class RyanAdadms:
         return [self._build_prophet_layer(L) for L in layers]
 
     def _build_prophet_layer(self, layer):
-        return layer(list(self._base_inputs.values()))
+        t = self._base_inputs['t']
+        if layer.n_items == 1:
+            id = self._fake_id
+        else:
+            id = self._base_inputs['id']
+        return layer([t, id])
 
     def _build_outputs(self, W):
         if self.outer_layers:
@@ -228,6 +234,9 @@ class RyanAdadms:
 
     def _max_n_items(self):
         return max(L.n_items for L in self.trends + self.seasonalities)
+
+    def _min_n_items(self):
+        return min(L.n_items for L in self.trends + self.seasonalities)
 
     @staticmethod
     def _list_if_str_or_none(x):
@@ -261,6 +270,7 @@ class RyanAdadms:
 
         if t_interval is None:
             t_interval = t_range[1] - t_range[0] + 1
+
         X = pd.DataFrame({
             't': np.tile(
                 np.linspace(*t_range, num=t_interval + 1),
