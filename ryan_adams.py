@@ -254,13 +254,20 @@ class RyanAdadms:
         inputs.extend(self._feature_inputs.values())
         return inputs
 
-    def plot(self, t_range, t_interval=None):
+    def plot(self, global_t_range=None, t_interval=None):
         import matplotlib.pyplot as plt
 
         n_plots = len(self.trends) + len(self.seasonalities)
         fig, axs = plt.subplots(n_plots, 1, figsize=(5, 10))
 
         for ax, L in zip(axs, list(self.trends) + list(self.seasonalities)):
+            if global_t_range is None:
+                if hasattr(L, 't_range'):
+                    t_range = L.t_range
+                elif hasattr(L, 'period'):
+                    t_range = (0, int(L.period))
+                else:
+                    raise ValueError
             # TODO: establish terms: component, prophet layers, etc.?
             ax.set_title(L.name)
             self._plot_component(L, t_range, t_interval, ax)
