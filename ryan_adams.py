@@ -1,9 +1,6 @@
-from itertools import chain
-
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-
 
 
 def _chain_layers(*layers):
@@ -18,36 +15,37 @@ class ItemizedLayer(keras.layers.Layer):
         super().__init__(*args, **kwargs)
         self.n_items = n_items
         self.shared_embedding_projection = shared_embedding_projection
+        # `keras` will automatically track trainable variables that are stored as
+        # instance attributes - even if those attributes are a list.
+        # Just use name mangling so we don't have to worry about coming up with
+        # a uber-clever name or colliding with a `keras` attribute.
+        self.__layers = []
 
-    # @_cache_param_creation
-    # @functools.lru_cache(128)
-    def _init_parameter(self, id, dim, name):
+    def _init_parameter(self, dim, name):
         name = f'{self.name}_{name}'
 
         flattened_dim = dim if isinstance(dim, int) else np.prod(dim)
         output_dim = (dim,) if isinstance(dim, int) else dim
 
-        layers = []
-        # # if id is not None:
-        # if self.n_items == 1:
-        #         # raise ValueError
-        #     embedding_layer = keras.layers.Embedding
-        # else:
-        #     embedding_layer = LazyEmbedding
-
-        layers.append(keras.layers.Embedding(
-            input_dim=self.n_items,
-            output_dim=flattened_dim,
-            input_length=1,
-            name=f'{name}_embedding'
-        ))
+        layers = [
+            # TODO: user `embeddings_regularizer`
+            keras.layers.Embedding(
+                input_dim=self.n_items,
+                output_dim=flattened_dim,
+                input_length=1,
+                name=f'{name}_embedding')
+        ]
 
         if self.shared_embedding_projection:
             layers.append(keras.layers.Dense(flattened_dim, name=f'{name}_dense'))
 
         layers.append(keras.layers.Reshape(output_dim, name=f'{name}_reshape'))
 
-        return layers
+        def param(id, layers=layers):
+            return _chain_layers(id, *layers)
+
+        self.__layers.append(layers)
+        return param
 
 
 class LinearTrend(ItemizedLayer):
@@ -66,15 +64,15 @@ class LinearTrend(ItemizedLayer):
         self.changepoint_range = changepoint_range
         self.changepoint_penalty = changepoint_penalty
 
-        self.m = self._init_parameter(id, 1, 'm')
-        self.k = self._init_parameter(id, 1, 'k')
-        self.δ = self._init_parameter(id, (1, self.n_changepoints), 'delta')
+        self.m = self._init_parameter(1, 'm')
+        self.k = self._init_parameter(1, 'k')
+        self.δ = self._init_parameter((1, self.n_changepoints), 'delta')
 
     def call(self, input_tensor):
         t, id = input_tensor
-        m = _chain_layers(id, *self.m)
-        k = _chain_layers(id, *self.k)
-        δ = _chain_layers(id, *self.δ)
+        m = self.m(id)
+        k = self.k(id)
+        δ = self.δ(id)
 
         # self.add_loss(keras.regularizers.l1(l1=1e-3)(δ))
         changepoints = tf.linspace(
@@ -119,13 +117,13 @@ class Seasonality(ItemizedLayer):
         super().__init__(*args, **kwargs)
         self.period = period
         self.order = order
-        self.a_n = self._init_parameter(id, self.order, 'a_n')
-        self.b_n = self._init_parameter(id, self.order, 'b_n')
+        self.a_n = self._init_parameter(self.order, 'a_n')
+        self.b_n = self._init_parameter(self.order, 'b_n')
 
     def call(self, input_tensor):
         t, id = input_tensor
-        a_n = _chain_layers(id, *self.a_n)
-        b_n = _chain_layers(id, *self.b_n)
+        a_n = self.a_n(id)
+        b_n = self.b_n(id)
         n = (tf.range(self.order, dtype='float') + 1)[None, :]
         return self.fourier_series(a_n, b_n, n, self.period, t)
 
@@ -206,7 +204,10 @@ class RyanAdadms:
         return self._build_prophet_layers(self.seasonalities)
 
     def _build_prophet_layers(self, layers):
-        return [L(list(self._base_inputs.values())) for L in _flatten([layers])]
+        return [self._build_prophet_layer(L) for L in layers]
+
+    def _build_prophet_layer(self, layer):
+        return layer(list(self._base_inputs.values()))
 
     def _build_outputs(self, W):
         if self.outer_layers:
@@ -243,11 +244,38 @@ class RyanAdadms:
             inputs.append(self._base_inputs['id'])
         inputs.extend(self._feature_inputs.values())
         return inputs
-    
 
+    def plot(self, t_range, t_interval=None):
+        import matplotlib.pyplot as plt
 
-def _flatten(x):
-    return list(chain.from_iterable(x))
+        n_plots = len(self.trends) + len(self.seasonalities)
+        fig, axs = plt.subplots(n_plots, 1, figsize=(5, 10))
+
+        for ax, L in zip(axs, list(self.trends) + list(self.seasonalities)):
+            # TODO: establish terms: component, prophet layers, etc.?
+            ax.set_title(L.name)
+            self._plot_component(L, t_range, t_interval, ax)
+
+    def _plot_component(self, L, t_range, t_interval, ax):
+        import pandas as pd
+
+        if t_interval is None:
+            t_interval = t_range[1] - t_range[0] + 1
+        X = pd.DataFrame({
+            't': np.tile(
+                np.linspace(*t_range, num=t_interval + 1),
+                L.n_items
+            ),
+            'id': np.repeat(
+                np.arange(L.n_items),
+                t_interval + 1
+            )
+        })
+
+        m = keras.models.Model(inputs=list(self._base_inputs.values()), outputs=self._build_prophet_layers([L]))
+        X['prediction'] = m.predict(X.to_dict('series'))
+        for _, group in X.groupby('id'):
+            ax.plot(group.t, group.prediction)
 
 
 def _singular_embedding_index(input_batch):
