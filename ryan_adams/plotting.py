@@ -3,7 +3,7 @@ import pandas as pd
 from tensorflow import keras
 
 
-def plot_components(model, global_t_range=None, t_interval=None):
+def plot_model_components(model, global_t_range=None, t_interval=None):
     import matplotlib.pyplot as plt
 
     n_plots = len(model.trends) + len(model.seasonalities)
@@ -20,9 +20,9 @@ def plot_components(model, global_t_range=None, t_interval=None):
         else:
             t_range = global_t_range    
         # TODO: establish terms: component, prophet layers, etc.?
-        plot_component(model, component, t_range, t_interval, ax)
+        plot_model_component(model, component, t_range, t_interval, ax)
 
-def plot_component(model, component, t_range, t_interval=None, ax=None):
+def plot_model_component(model, component, t_range, t_interval=None, ax=None):
     import pandas as pd
 
     # infer sensible defaults
@@ -37,7 +37,7 @@ def plot_component(model, component, t_range, t_interval=None, ax=None):
         fig, ax = plt.subplots(figsize=(10, 5))
 
     # generate the outputs
-    m = keras.models.Model(inputs=list(model._base_inputs.values()), outputs=model._build_prophet_layers([component]))
+    m = keras.models.Model(inputs=list(model._base_inputs.values()), outputs=model._build_component_layer(component))
     X = pd.DataFrame({
         't': np.tile(
             np.linspace(*t_range, num=t_interval + 1),
