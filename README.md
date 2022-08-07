@@ -6,4 +6,4 @@ flexibility. Supporting
 - Batch predictions: the ability to fit to many series at once
 - Global and Local seasonal/trend features
 - Arbitrary loss functions
-- Integration with [tesnorflow](https://www.tensorflow.org/) for unlimited extensibility
+- Integration with [tensorflow](https://www.tensorflow.org/) for unlimited extensibility
