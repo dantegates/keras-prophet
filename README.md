@@ -1,6 +1,6 @@
 # Batch Prophet
 
-[CI Status](https://github.com/dantegates/keras-prophet/workflows/CI/badge.svg?branch=master)
+![CI](https://github.com/dantegates/keras-prophet/actions/workflows/python-app.yml/badge.svg)
 
 Like [Facebook's Prophet](https://facebook.github.io/prophet/) but with more
 flexibility. Supporting
