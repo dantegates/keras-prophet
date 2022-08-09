@@ -1,3 +1,10 @@
+install:
+	python3 -m pip install .[all]
+
+update-deps:
+	pip install --upgrade pip-tools pip setuptools
+	pip-compile --upgrade --build-isolation --generate-hashes --output-file requirements/main.txt requirements/main.in
+
 test:
 	python3 -m pytest tests -v --tb=no
 
@@ -8,9 +15,6 @@ coverage:
 	coverage run --source ryan_adams -m unittest discover -s tests
 	coverage html
 	open htmlcov/index.html
-
-install:
-	python3 -m pip install .[all]
 
 docs: install
 	$(MAKE) -C $(shell pwd)/docs html

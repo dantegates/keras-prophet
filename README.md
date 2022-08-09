@@ -1,5 +1,7 @@
 # Batch Prophet
 
+[CI Status](https://github.com/dantegates/keras-prophet/workflows/CI/badge.svg?branch=master)
+
 Like [Facebook's Prophet](https://facebook.github.io/prophet/) but with more
 flexibility. Supporting
 
