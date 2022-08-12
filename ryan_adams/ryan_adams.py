@@ -9,7 +9,7 @@ class RyanAdams:
     def __init__(self, *,
                  trends=None, seasonalities=None,
                  outer_layers=None,
-                 output_activations='linear',
+                 output_activations=None,
                  feature_names=None,
                  loss='mse',
                  optimizer='adam',
@@ -90,8 +90,11 @@ class RyanAdams:
             W = _chain_layers(W, *self.outer_layers)
 
         Z = []
-        for a in self.output_activations:
-            Z.append(keras.layers.Dense(1, activation=a)(W))
+        if self.output_activations:
+            for a in self.output_activations:
+                Z.append(keras.layers.Dense(1, activation=a)(W))
+        else:
+            Z.append(keras.layers.Dense(1, kernel_initializer='ones', bias_initializer='zeros', trainable=False)(W))
 
         return keras.layers.Concatenate()(Z)
 

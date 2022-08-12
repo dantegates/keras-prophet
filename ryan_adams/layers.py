@@ -18,11 +18,10 @@ def _singular_embedding_index(input_batch):
 
 
 class BaseComponentLayer(keras.layers.Layer):
-    def __init__(self, *args, n_items, weight_regularizer=keras.regularizers.L1(1e-3),
+    def __init__(self, *args, n_items,
                  shared_embedding_projection=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.n_items = n_items
-        self.weight_regularizer = weight_regularizer
         self.shared_embedding_projection = shared_embedding_projection
         # `keras` will automatically track trainable variables that are stored as
         # instance attributes - even if those attributes are a list.
@@ -30,7 +29,7 @@ class BaseComponentLayer(keras.layers.Layer):
         # a uber-clever name or colliding with a `keras` attribute.
         self.__layers = []
 
-    def _init_parameter(self, dim, name):
+    def _init_parameter(self, dim, name, regularizer=None):
         name = f'{self.name}_{name}'
 
         flattened_dim = dim if isinstance(dim, int) else np.prod(dim)
@@ -41,7 +40,7 @@ class BaseComponentLayer(keras.layers.Layer):
                 input_dim=self.n_items,
                 output_dim=flattened_dim,
                 input_length=1,
-                embeddings_regularizer=self.weight_regularizer,
+                embeddings_regularizer=regularizer,
                 name=f'{name}_embedding')
         ]
 
@@ -72,16 +71,18 @@ class LinearTrend(BaseComponentLayer):
                  t_range: tuple = None,
                  n_changepoints: int = 20,
                  changepoint_range: float = .8,
+                 changepoint_penalty: float = 10,
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.t0 = t0
         self.t_range = t_range
         self.n_changepoints = n_changepoints
         self.changepoint_range = changepoint_range
+        self.changepoint_penalty = changepoint_penalty
 
         self.m = self._init_parameter(1, 'm')
         self.k = self._init_parameter(1, 'k')
-        self.δ = self._init_parameter((1, self.n_changepoints), 'delta')
+        self.δ = self._init_parameter((1, self.n_changepoints), 'delta', keras.regularizers.L1(self.changepoint_penalty))
 
     def call(self, input_tensor):
         t, id = super().call(input_tensor)
