@@ -90,12 +90,7 @@ class LinearTrend(BaseComponentLayer):
         k = self.k(id)
         δ = self.δ(id)
 
-        # self.add_loss(keras.regularizers.l1(l1=1e-3)(δ))
-        changepoints = tf.linspace(
-            self.t_range[0],
-            int(self.changepoint_range * self.t_range[1]),
-            self.n_changepoints + 1)
-        s = tf.cast(changepoints, 'float')[1:]
+        s = self.changepoints(self.t_range, self.changepoint_range, self.n_changepoints)
 
         return self.trend(m, k, δ, t, s)
 
@@ -112,6 +107,14 @@ class LinearTrend(BaseComponentLayer):
         offset = tf.reduce_sum(tf.multiply(A, γ), axis=-1) + m
 
         return trend + offset
+
+    @staticmethod
+    def changepoints(t_range, changepoint_range, n_changepoints):
+        changepoints = tf.linspace(
+            t_range[0],
+            int(changepoint_range * t_range[1]),
+            n_changepoints + 1)
+        return tf.cast(changepoints, 'float')[1:]
 
 
 class SaturatingTrend(LinearTrend):
