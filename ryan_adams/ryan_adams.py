@@ -27,8 +27,8 @@ class RyanAdams:
         self._base_inputs, self._feature_inputs = self._build_inputs()
         self._model = self._build_model()
 
-    def fit(self, X, y):
-        self._model.fit(X, y)
+    def fit(self, X, y, **kwargs):
+        self._model.fit(X, y, **kwargs)
         return self
 
     def predict(self, X):
