@@ -41,7 +41,7 @@ class RyanAdams:
         W = keras.layers.Concatenate()([
             *trend_layers,
             *seasonal_layers,
-            *(feature_layer or [])])
+            *([] if feature_layer is None else [feature_layer])])
         Z = self._build_outputs(W)
         model = keras.models.Model(
             inputs=self._model_inputs,
