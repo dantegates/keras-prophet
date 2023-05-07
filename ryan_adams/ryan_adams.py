@@ -10,7 +10,7 @@ class RyanAdams:
                  trends=None, seasonalities=None,
                  outer_layers=None,
                  output_activations=None,
-                 feature_names=None,
+                 features=None,
                  loss='mse',
                  optimizer='adam',
                  inputs=None):
@@ -18,7 +18,7 @@ class RyanAdams:
         self.seasonalities = self._list_if_str_or_none(seasonalities)
         self.outer_layers = self._list_if_str_or_none(outer_layers)
         self.output_activations = self._list_if_str_or_none(output_activations)
-        self.feature_names = self._list_if_str_or_none(feature_names)
+        self.features = self._list_if_str_or_none(features)
 
         self.loss = loss
         self.optimizer = optimizer
@@ -58,14 +58,14 @@ class RyanAdams:
 
         feature_inputs = {
             f: self._get_or_create(self._inputs, f, keras.Input, (1,), name=f)
-            for f in self.feature_names
+            for f in self.features
         }
 
         return base_inputs, feature_inputs
 
     def _build_feature_layer(self):
-        if self._feature_inputs:
-            return self._build_dense_features(self._feature_inputs)
+        if self.features:
+            return self._build_dense_features(self.features, self._feature_inputs)
         return None
 
     def _build_trend_layers(self):
@@ -92,18 +92,20 @@ class RyanAdams:
         Z = []
         if self.output_activations:
             for a in self.output_activations:
-                Z.append(keras.layers.Dense(1, activation=a)(W))
+                if not callable(a):
+                    a = keras.layers.Dense(1, activation=a)
+                Z.append(a(W))
         else:
             Z.append(keras.layers.Dense(1, kernel_initializer='ones', bias_initializer='zeros', trainable=False)(W))
 
         return keras.layers.Concatenate()(Z)
 
     @staticmethod
-    def _build_dense_features(features):
-        return keras.layers.DenseFeatures([
-            tf.feature_column.numeric_column(name)
-            for name in features.keys()
-        ])(list(features.values()))
+    def _build_dense_features(features, inputs):
+        return keras.layers.Concatenate()([
+            W(inputs[f])
+            for f, W in features.items()
+        ])
 
     def _max_n_items(self):
         return max(L.n_items for L in self.trends + self.seasonalities)
